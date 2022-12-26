@@ -19,6 +19,7 @@ class AdvancedSegment<K extends Object, V extends String>
     this.backgroundColor = const Color(0x42000000),
     this.sliderColor = const Color(0xFFFFFFFF),
     this.sliderOffset = 2.0,
+    this.rowCount = 1,
     this.animationDuration = const Duration(milliseconds: 250),
     this.shadow = const <BoxShadow>[
       BoxShadow(
@@ -66,6 +67,9 @@ class AdvancedSegment<K extends Object, V extends String>
   /// Slider decoration
   final BoxDecoration? sliderDecoration;
 
+  /// Number of horizontal rows of segments
+  final int rowCount;
+
   @override
   _AdvancedSegmentState<K, V> createState() => _AdvancedSegmentState();
 }
@@ -77,11 +81,12 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     fontSize: 14,
     color: Color(0xFF000000),
   );
-  late final AnimationController _animationController;
   late final ValueNotifier<K> _defaultController;
   late ValueNotifier<K> _controller;
   late Size _itemSize;
   late Size _containerSize;
+
+  Offset _offset = Offset.zero;
 
   @override
   void initState() {
@@ -92,22 +97,6 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     _defaultController = ValueNotifier<K>(widget.segments.keys.first);
 
     _controller = widget.controller ?? _defaultController;
-    _controller.addListener(_handleControllerChanged);
-
-    _animationController = AnimationController(
-      vsync: this,
-      value: _obtainAnimationValue(),
-      duration: widget.animationDuration,
-    );
-  }
-
-  void _handleControllerChanged() {
-    final animationValue = _obtainAnimationValue();
-
-    _animationController.animateTo(
-      animationValue,
-      duration: widget.animationDuration,
-    );
   }
 
   void _initSizes() {
@@ -122,8 +111,8 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     );
 
     _containerSize = Size(
-      _itemSize.width * widget.segments.length,
-      _itemSize.height,
+      _itemSize.width * (widget.segments.length / widget.rowCount),
+      _itemSize.height * widget.rowCount,
     );
   }
 
@@ -132,20 +121,15 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.controller != widget.controller) {
-      _controller.removeListener(_handleControllerChanged);
       _controller = widget.controller ?? _defaultController;
-
-      _handleControllerChanged();
-
-      _controller.addListener(_handleControllerChanged);
     }
 
     if (oldWidget.segments != widget.segments) {
       _initSizes();
-
-      _animationController.value = _obtainAnimationValue();
     }
   }
+
+  int get itemsPerRow => (widget.segments.length / widget.rowCount).ceil();
 
   @override
   Widget build(BuildContext context) {
@@ -161,75 +145,67 @@ class _AdvancedSegmentState<K extends Object, V extends String>
         opacity: widget.controller != null ? 1 : 0.75,
         child: Stack(
           children: [
-            AnimatedBuilder(
-              animation: _animationController,
-              builder: (_, child) {
-                return Transform.translate(
-                  offset: Tween<Offset>(
-                    begin: Offset.zero,
-                    end: _obtainEndOffset(Directionality.of(context)),
-                  )
-                      .animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: Curves.linear,
-                      ))
-                      .value,
-                  child: child,
-                );
-              },
-              child: FractionallySizedBox(
-                widthFactor: 1 / widget.segments.length,
-                heightFactor: 1,
-                child: Container(
-                  margin: EdgeInsets.all(widget.sliderOffset),
-                  // height: _itemSize.height - widget.sliderOffset * 2,
-                  decoration: widget.sliderDecoration ??
-                      BoxDecoration(
-                        color: widget.sliderColor,
-                        borderRadius: widget.borderRadius.subtract(
-                            BorderRadius.all(
-                                Radius.circular(widget.sliderOffset))),
-                        boxShadow: widget.shadow,
-                      ),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: _handlePan,
+                onTapUp: _handleTap,
+                child: AnimatedContainer(duration: widget.animationDuration,
+                    alignment: Directionality.of(context) == TextDirection.rtl ? Alignment.topRight : Alignment.topLeft,
+                    curve: Curves.ease,
+                    transform: Matrix4.translationValues(Directionality.of(context) == TextDirection.rtl ? -_offset.dx :_offset.dx, _offset.dy, 0),
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / (widget.segments.length / widget.rowCount),
+                    heightFactor: 1 / widget.rowCount,
+                    child: Container(
+                      margin: EdgeInsets.all(widget.sliderOffset),
+                      decoration: widget.sliderDecoration ??
+                          BoxDecoration(
+                            color: widget.sliderColor,
+                            borderRadius: widget.borderRadius.subtract(
+                                BorderRadius.all(
+                                    Radius.circular(widget.sliderOffset))),
+                            boxShadow: widget.shadow,
+                          ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            ValueListenableBuilder(
-              valueListenable: _controller,
-              builder: (_, value, __) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: widget.segments.entries.map((entry) {
-                    return GestureDetector(
-                      onHorizontalDragUpdate: (details) => _handleSegmentMove(
-                        details,
-                        entry.key,
-                        Directionality.of(context),
-                      ),
-                      onTap: () => _handleSegmentPressed(entry.key),
-                      child: Container(
-                        width: _itemSize.width,
-                        height: _itemSize.height,
-                        color: const Color(0x00000000),
-                        child: AnimatedDefaultTextStyle(
-                          duration: widget.animationDuration,
-                          style: _defaultTextStyle.merge(value == entry.key
-                              ? widget.activeStyle
-                              : widget.inactiveStyle),
-                          overflow: TextOverflow.clip,
-                          maxLines: 1,
-                          softWrap: false,
-                          child: Center(
-                            child: Text(entry.value),
+            IgnorePointer(
+              child: ValueListenableBuilder(
+                valueListenable: _controller,
+                builder: (_, value, __) {
+                  return Column(
+                    children: List.generate(widget.rowCount, (row) =>
+                      Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: widget.segments.entries.toList().sublist(row*itemsPerRow, row*itemsPerRow + itemsPerRow).map((entry) {
+                        return Container(
+                          width: _itemSize.width,
+                          height: _itemSize.height,
+                          color: const Color(0x00000000),
+                          child: AnimatedDefaultTextStyle(
+                            duration: widget.animationDuration,
+                            style: _defaultTextStyle.merge(value == entry.key
+                                ? widget.activeStyle
+                                : widget.inactiveStyle),
+                            overflow: TextOverflow.clip,
+                            maxLines: 1,
+                            softWrap: false,
+                            child: Center(
+                              child: Text(entry.value),
+                            ),
                           ),
-                        ),
-                      ),
+                      );
+                    }).toList(growable: false),
+                  ),
+                    ),
                     );
-                  }).toList(growable: false),
-                );
-              },
+                },
+              ),
             ),
           ],
         ),
@@ -253,55 +229,37 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     return textPainter.size;
   }
 
-  double _obtainAnimationValue() {
-    return widget.segments.keys
-            .toList(growable: false)
-            .indexOf(_controller.value)
-            .toDouble() /
-        (widget.segments.keys.length - 1);
+  _handleTap(TapUpDetails details) {
+    _handleInteraction(details.localPosition);
   }
 
-  void _handleSegmentPressed(K key) {
-    if (widget.controller != null) {
-      _controller.value = key;
+  _handlePan(DragUpdateDetails details) {
+   _handleInteraction(details.localPosition);
+  }
+
+    _handleInteraction(Offset pos) {
+
+    var pX = pos.dx / _containerSize.width;
+    var pY = pos.dy / _containerSize.height;
+
+    var iX = (pX * (itemsPerRow-1)).round().clamp(0, itemsPerRow-1);
+    if (Directionality.of(context) == TextDirection.rtl) {
+      iX = (itemsPerRow - 1) - iX;
     }
-  }
+    var iY = (pY * (widget.rowCount-1)).round().clamp(0, widget.rowCount-1);
+    var index = iX + (iY*itemsPerRow);
 
-  void _handleSegmentMove(
-    DragUpdateDetails touch,
-    K value,
-    TextDirection textDirection,
-  ) {
-    if (widget.controller != null) {
-      final indexKey = widget.segments.keys.toList().indexOf(value);
+    // Snap to segment
+setState(() {
+  _offset = Offset(iX*_itemSize.width, iY*_itemSize.height);
+  _controller.value = widget.segments.keys.elementAt(index);
+});
 
-      final indexMove = textDirection == TextDirection.rtl
-          ? (_itemSize.width * indexKey - touch.localPosition.dx) /
-                  _itemSize.width +
-              1
-          : (_itemSize.width * indexKey + touch.localPosition.dx) /
-              _itemSize.width;
-
-      if (indexMove >= 0 && indexMove <= widget.segments.keys.length) {
-        _controller.value = widget.segments.keys.elementAt(indexMove.toInt());
-      }
-    }
-  }
-
-  Offset _obtainEndOffset(TextDirection textDirection) {
-    final dx = _itemSize.width * (widget.segments.length - 1);
-
-    return Offset(textDirection == TextDirection.rtl ? -dx : dx, 0);
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-
-    _controller.removeListener(_handleControllerChanged);
-
     _defaultController.dispose();
-
     super.dispose();
   }
 }

@@ -40,6 +40,8 @@ class _MyAppState extends State<MyApp> {
   final _selectedSegment_04 = ValueNotifier('all');
   final _selectedSegment_05 = ValueNotifier('all');
   final _selectedSegment_06 = ValueNotifier(Segment.all);
+  final _selectedSegment_07 = ValueNotifier('all');
+  final _selectedSegment_08 = ValueNotifier('all');
 
   @override
   Widget build(BuildContext context) {
@@ -225,6 +227,35 @@ class _MyAppState extends State<MyApp> {
                     Segment.all: Segment.all.label,
                     Segment.starred: Segment.starred.label,
                   },
+                ),
+                _buildLabel('2D'),
+                AdvancedSegment(
+                  controller: _selectedSegment_07,
+                  rowCount: 3,
+                  segments: {
+                    'all': 'All',
+                    'primary': 'Primary',
+                    'secondary': 'Secondary',
+                    'tertiary': 'Tertiary',
+                    'tertiary2': 'Tertiary2',
+                    'tertiary3': 'Tertiary3',
+                  },
+                ),
+                _buildLabel('2D RTL'),
+                Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: AdvancedSegment(
+                    controller: _selectedSegment_08,
+                    rowCount: 3,
+                    segments: {
+                      'all': 'All',
+                      'primary': 'Primary',
+                      'secondary': 'Secondary',
+                      'tertiary': 'Tertiary',
+                      'tertiary2': 'Tertiary2',
+                      'tertiary3': 'Tertiary3',
+                    },
+                  ),
                 ),
               ],
             ),
