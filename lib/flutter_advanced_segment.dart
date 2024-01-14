@@ -97,6 +97,8 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     _defaultController = ValueNotifier<K>(widget.segments.keys.first);
 
     _controller = widget.controller ?? _defaultController;
+
+    _setOffset();
   }
 
   void _initSizes() {
@@ -237,7 +239,7 @@ class _AdvancedSegmentState<K extends Object, V extends String>
    _handleInteraction(details.localPosition);
   }
 
-    _handleInteraction(Offset pos) {
+  _handleInteraction(Offset pos) {
 
     var pX = pos.dx / _containerSize.width;
     var pY = pos.dy / _containerSize.height;
@@ -250,11 +252,20 @@ class _AdvancedSegmentState<K extends Object, V extends String>
     var index = iX + (iY*itemsPerRow);
 
     // Snap to segment
-setState(() {
-  _offset = Offset(iX*_itemSize.width, iY*_itemSize.height);
-  _controller.value = widget.segments.keys.elementAt(index);
-});
+    setState(() {
+      _offset = Offset(iX*_itemSize.width, iY*_itemSize.height);
+      _controller.value = widget.segments.keys.elementAt(index);
+    });
+  }
 
+  _setOffset() {
+    int index = widget.segments.keys.toList().indexOf(_controller.value);
+    int row = (index / itemsPerRow).floor();
+    int column = index % itemsPerRow;
+
+    setState(() {
+      _offset = Offset(column*_itemSize.width, row*_itemSize.height);
+    });
   }
 
   @override
